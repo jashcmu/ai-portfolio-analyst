@@ -1,0 +1,48 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Stock {
+  id             Int            @id @default(autoincrement())
+  ticker         String         @unique
+  company        String
+  toneScore      Int
+  growthScore    Int
+  profitabilityScore Int
+  valuationScore Int
+  balanceScore   Int
+  healthScore    Int
+  rating         String
+  notes          String?
+  lastRefreshedAt    DateTime?     // <--- NEW
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+
+  // Relations
+  toneAnalyses   ToneAnalysis[]
+}
+
+model ToneAnalysis {
+  id              Int    @id @default(autoincrement())
+  stock           Stock  @relation(fields: [stockId], references: [id])
+  stockId         Int
+  quarter         String
+  confidenceScore Int?
+  finalToneScore  Int?
+  summary         String?
+  recommendation  String?
+  rawTranscript   String? // optional
+  createdAt       DateTime @default(now())
+}
+
+  // Relation
+  stock Stock @relation(fields: [stockId], references: [id])
+}
