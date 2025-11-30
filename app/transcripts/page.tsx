@@ -52,7 +52,7 @@ export default async function HomePage() {
           </div>
         ) : (
           <div className="grid gap-6 md:grid-cols-2">
-            {stocks.map((stock) => (
+            {stocks.map((stock: any) => (
               <article
                 key={stock.id}
                 className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm flex flex-col justify-between"
