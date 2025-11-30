@@ -1,48 +1,53 @@
 // prisma/schema.prisma
 
+// Generate the Prisma Client
 generator client {
   provider = "prisma-client-js"
 }
 
+// Data source (SQLite by default, matches your DATABASE_URL in .env)
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
+// ========== MODELS ==========
+
+// Main Stock table used by your app
 model Stock {
-  id             Int            @id @default(autoincrement())
-  ticker         String         @unique
-  company        String
-  toneScore      Int
-  growthScore    Int
-  profitabilityScore Int
-  valuationScore Int
-  balanceScore   Int
-  healthScore    Int
-  rating         String
-  notes          String?
-  lastRefreshedAt    DateTime?     // <--- NEW
+  id                 Int           @id @default(autoincrement())
+  ticker             String        @unique
+  company            String
+
+  toneScore          Int?
+  growthScore        Int?
+  profitabilityScore Int?
+  valuationScore     Int?
+  balanceScore       Int?
+  healthScore        Int?
+
+  rating             String?
+  notes              String?
+
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
 
-
-  // Relations
-  toneAnalyses   ToneAnalysis[]
+  // History of analyses (transcripts & market snapshots)
+  toneAnalyses       ToneAnalysis[]
 }
 
+// Historical analysis records, linked to a Stock
 model ToneAnalysis {
-  id              Int    @id @default(autoincrement())
-  stock           Stock  @relation(fields: [stockId], references: [id])
+  id              Int      @id @default(autoincrement())
   stockId         Int
-  quarter         String
+
   confidenceScore Int?
   finalToneScore  Int?
   summary         String?
   recommendation  String?
-  rawTranscript   String? // optional
-  createdAt       DateTime @default(now())
-}
 
-  // Relation
-  stock Stock @relation(fields: [stockId], references: [id])
+  createdAt       DateTime @default(now())
+
+  // Relation back to Stock
+  stock           Stock    @relation(fields: [stockId], references: [id])
 }
