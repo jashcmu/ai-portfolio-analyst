@@ -1,30 +1,44 @@
+// app/api/search-stocks/route.ts
+// GET /api/search-stocks?query=...
+
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const q = searchParams.get("q") || "";
+type StockSearchResult = {
+  ticker: string;
+  company: string;
+};
 
-  if (!q.trim()) {
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const q = (url.searchParams.get("query") ?? "").trim();
+
+  // No query -> empty list
+  if (!q) {
     return NextResponse.json([], { status: 200 });
   }
 
-  const results = await prisma.stock.findMany({
+  // Search in ticker OR company (no `mode` here to avoid Prisma type issues)
+  const results: StockSearchResult[] = await prisma.stock.findMany({
     where: {
       OR: [
-        { ticker: { contains: q } },    // no "mode" for sqlite
+        { ticker: { contains: q } },
         { company: { contains: q } },
       ],
     },
     take: 10,
     orderBy: { ticker: "asc" },
+    select: {
+      ticker: true,
+      company: true,
+    },
   });
 
-  return NextResponse.json(
-    results.map((s) => ({
-      ticker: s.ticker,
-      company: s.company,
-    })),
-    { status: 200 }
-  );
+  // ⬇️ IMPORTANT: we explicitly type `s` so TS cannot complain
+  const payload = results.map((s: StockSearchResult) => ({
+    ticker: s.ticker,
+    company: s.company,
+  }));
+
+  return NextResponse.json(payload, { status: 200 });
 }
