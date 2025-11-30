@@ -1,14 +1,18 @@
 // prisma/schema.prisma
 
-// Generate the Prisma Client
-generator client {
-  provider = "prisma-client-js"
-}
+
 
 // Data source (SQLite by default, matches your DATABASE_URL in .env)
 datasource db {
+ generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
   provider = "sqlite"
-  url      = env("DATABASE_URL")
+  url      = "file:./dev.db"
+}
+
 }
 
 // ========== MODELS ==========
