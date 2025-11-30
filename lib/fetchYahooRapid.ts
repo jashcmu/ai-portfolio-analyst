@@ -2,6 +2,10 @@
 // Helper to fetch a quote snapshot from Yahoo Finance (RapidAPI)
 // and normalise it into a MarketSnapshot object.
 
+// lib/fetchYahooRapid.ts
+// Helper to fetch a quote snapshot from Yahoo Finance (RapidAPI)
+// and normalise it into a MarketSnapshot object.
+
 export type MarketSnapshot = {
   ticker: string;
   companyName: string | null;
@@ -12,7 +16,19 @@ export type MarketSnapshot = {
   changeFrom52wHighPct: number | null;// distance from 52w high in %
   marketCap: number | null;
   peRatio: number | null;
+
+  // 🔽 Extra fundamentals used by quantModel.ts (all optional)
+  priceToSales?: number | null;
+  priceToBook?: number | null;
+  pegRatio?: number | null;
+  roe?: number | null;
+  netMargin?: number | null;
+  revenueGrowth1y?: number | null;
+  epsGrowth1y?: number | null;
+  debtToEquity?: number | null;
+  dividendYield?: number | null;
 };
+
 
 const DEFAULT_HOST = "yahoo-finance15.p.rapidapi.com";
 
