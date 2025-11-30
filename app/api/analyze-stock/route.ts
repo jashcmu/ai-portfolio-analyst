@@ -1,5 +1,7 @@
 // app/api/analyze-stock/route.ts
-// Multi-factor model using Yahoo (quote + financial-data) + FMP (ratios-ttm)
+// Route: POST /api/analyze-stock
+// Uses Yahoo/FMP data + quant model (no OpenAI) to score a single stock
+// and upsert it into the Prisma Stock table.
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/prisma";
@@ -9,28 +11,16 @@ import {
 } from "@/lib/fetchYahooRapid";
 import {
   computeQuantAnalysis,
+  FALLBACK_ANALYSIS,
   type MarketAnalysis,
-} from "@/lib/quantModel";
-
-const FALLBACK_ANALYSIS: MarketAnalysis = {
-  rating: "HOLD",
-  conviction: 40,
-  toneScore: 50,
-  growthScore: 50,
-  profitabilityScore: 50,
-  valuationScore: 50,
-  balanceScore: 50,
-  healthScore: 50,
-  summary:
-    "We could not compute a full multi-factor score because key data was missing. Treat this as a neutral placeholder.",
-  keyRisks: ["Insufficient or inconsistent data for robust scoring."],
-  thesis:
-    "Data gaps prevent a clear directional view. Consider supplementing this with manual research.",
-};
+} from "./analyst";
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json().catch(() => ({}))) as { ticker?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      ticker?: string;
+    };
+
     const ticker = (body.ticker ?? "").toString().trim().toUpperCase();
 
     if (!ticker) {
@@ -40,99 +30,76 @@ export async function POST(req: Request) {
       );
     }
 
-    // 1) Fetch combined snapshot (Yahoo + FMP)
-    let snapshot = await fetchYahooQuote(ticker);
+    // 1) Try to get a live snapshot from Yahoo
+    let snapshot: MarketSnapshot | null = await fetchYahooQuote(
+      ticker
+    );
 
+    // 2) Fallback minimal snapshot if Yahoo fails
     if (!snapshot) {
       console.warn(
-        "analyze-stock: snapshot missing, using minimal placeholder for",
+        "analyze-stock: Yahoo snapshot missing, falling back to minimal snapshot for",
         ticker
       );
+
       snapshot = {
         ticker,
         companyName: ticker,
         price: null,
-        prevClose: null,
-        dayHigh: null,
-        dayLow: null,
-        fiftyTwoWeekHigh: null,
-        fiftyTwoWeekLow: null,
-        volume: null,
-        avgVolume3m: null,
-        change1dPct: null,
+        change1d: null,
+        change1m: null,
         changeFrom52wLowPct: null,
         changeFrom52wHighPct: null,
-        fiftyTwoWeekChangePct: null,
         marketCap: null,
         peRatio: null,
-        pegRatio: null,
-        priceToSales: null,
-        priceToBook: null,
-        profitMargin: null,
-        roe: null,
-        revenueGrowth: null,
-        epsGrowth: null,
-        beta: null,
-      } satisfies MarketSnapshot;
+      };
     }
 
-    console.log("analyze-stock snapshot:", snapshot);
+    // 3) Run the quant model to get scores
+    const analysis: MarketAnalysis = computeQuantAnalysis(snapshot);
 
-    // 2) Deterministic quant scores
-    const analysis = computeQuantAnalysis(snapshot);
-
-    const allFifty =
-      analysis.toneScore === 50 &&
-      analysis.growthScore === 50 &&
-      analysis.profitabilityScore === 50 &&
-      analysis.valuationScore === 50 &&
-      analysis.balanceScore === 50 &&
-      analysis.healthScore === 50;
-
-    const final = allFifty ? FALLBACK_ANALYSIS : analysis;
-
-    // 3) Upsert into DB
+    // 4) Upsert into Stock table
     const stock = await prisma.stock.upsert({
       where: { ticker },
       create: {
         ticker,
         company: snapshot.companyName ?? ticker,
-        toneScore: final.toneScore,
-        growthScore: final.growthScore,
-        profitabilityScore: final.profitabilityScore,
-        valuationScore: final.valuationScore,
-        balanceScore: final.balanceScore,
-        healthScore: final.healthScore,
-        rating: final.rating,
-        notes: final.summary,
+        toneScore: analysis.toneScore,
+        growthScore: analysis.growthScore,
+        profitabilityScore: analysis.profitabilityScore,
+        valuationScore: analysis.valuationScore,
+        balanceScore: analysis.balanceScore,
+        healthScore: analysis.healthScore,
+        rating: analysis.rating,
+        notes: analysis.summary,
       },
       update: {
         company: snapshot.companyName ?? ticker,
-        toneScore: final.toneScore,
-        growthScore: final.growthScore,
-        profitabilityScore: final.profitabilityScore,
-        valuationScore: final.valuationScore,
-        balanceScore: final.balanceScore,
-        healthScore: final.healthScore,
-        rating: final.rating,
-        notes: final.summary,
+        toneScore: analysis.toneScore,
+        growthScore: analysis.growthScore,
+        profitabilityScore: analysis.profitabilityScore,
+        valuationScore: analysis.valuationScore,
+        balanceScore: analysis.balanceScore,
+        healthScore: analysis.healthScore,
+        rating: analysis.rating,
+        notes: analysis.summary,
       },
     });
 
-    // 4) Optional history logging
+    // 5) Optional: store a toneAnalysis history row
     try {
       await prisma.toneAnalysis.create({
         data: {
           stockId: stock.id,
-          confidenceScore: final.conviction,
-          finalToneScore: final.healthScore,
-          summary: final.summary,
-          recommendation: final.rating,
+          confidenceScore: analysis.conviction,
+          finalToneScore: analysis.healthScore,
+          summary: analysis.summary,
+          recommendation: analysis.rating,
         },
       });
     } catch (e) {
       console.warn(
-        "analyze-stock: could not create ToneAnalysis entry",
+        "analyze-stock: Could not create ToneAnalysis entry",
         e
       );
     }
@@ -141,10 +108,9 @@ export async function POST(req: Request) {
       {
         stock,
         snapshot,
-        analysis: final,
+        analysis,
         meta: {
-          source: "yahoo_quote + yahoo_financial_data + fmp_ratios_ttm",
-          usesFundamentals: true,
+          source: "quant_model_yahoo_or_fallback",
         },
       },
       { status: 200 }
