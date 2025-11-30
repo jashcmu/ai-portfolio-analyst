@@ -1,57 +1,44 @@
 // prisma/schema.prisma
 
-
-
-// Data source (SQLite by default, matches your DATABASE_URL in .env)
-datasource db {
- generator client {
+// 1. Generator: tells Prisma to create the JS client
+generator client {
   provider = "prisma-client-js"
 }
 
+// 2. Datasource: SQLite DB stored in dev.db
 datasource db {
   provider = "sqlite"
   url      = "file:./dev.db"
 }
 
-}
+// 3. Your models (unchanged from the good version we had)
 
-// ========== MODELS ==========
-
-// Main Stock table used by your app
 model Stock {
-  id                 Int           @id @default(autoincrement())
-  ticker             String        @unique
+  id                 Int      @id @default(autoincrement())
+  ticker             String   @unique
   company            String
-
   toneScore          Int?
   growthScore        Int?
   profitabilityScore Int?
   valuationScore     Int?
   balanceScore       Int?
   healthScore        Int?
-
   rating             String?
   notes              String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-
-  // History of analyses (transcripts & market snapshots)
   toneAnalyses       ToneAnalysis[]
 }
 
-// Historical analysis records, linked to a Stock
 model ToneAnalysis {
-  id              Int      @id @default(autoincrement())
-  stockId         Int
+  id               Int      @id @default(autoincrement())
+  stockId          Int
+  confidenceScore  Int?
+  finalToneScore   Int?
+  summary          String?
+  recommendation   String?
+  createdAt        DateTime @default(now())
 
-  confidenceScore Int?
-  finalToneScore  Int?
-  summary         String?
-  recommendation  String?
-
-  createdAt       DateTime @default(now())
-
-  // Relation back to Stock
-  stock           Stock    @relation(fields: [stockId], references: [id])
+  stock            Stock    @relation(fields: [stockId], references: [id])
 }
